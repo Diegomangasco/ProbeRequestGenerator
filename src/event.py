@@ -77,7 +77,7 @@ def handle_event(event: Event, simulator: Simulator):
         if event.burst_end:
             event.device.number_bursts_sent += 1
         with open(simulator.out_file + '_probe_ids.txt', 'a') as f:
-            f.write("{}\n".format(event.device.id))
+            f.write("Device ID: {}; MAC Address: {}\n".format(event.device.id, event.device.last_mac_address))
         wrpcap(simulator.out_file + ".pcap", event.packet, append=True)
         event.device.number_packets_sent += 1
 

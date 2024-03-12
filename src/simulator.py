@@ -19,7 +19,7 @@ class Simulator:
         self.average_permanence_time = avg_permanence_time
         self.closed_environment = closed_environment
 
-    def new_burst(self, time: datetime, device: Device) -> tuple[float, float, int, list]:
+    def new_burst(self, time: datetime, device: Device) -> tuple[float, float, int, list, str]:
         """Manage device probe request creation and return the deltatime to add for the next probe request"""
         # Inter packet time probabilities (need to be normalized)
         int_pkt_time = self.database.get_prob_int_burst(device.model, device.phase)
@@ -38,13 +38,13 @@ class Simulator:
         burst_rate_chosen = np.random.choice(rates_keys, size=1, p=rate_probs)[0]
         burst_length_chosen = np.random.choice(list(burst_length.keys()), size=1, p=list(burst_length.values()))[0]
 
-        packets = device.send_probe(int_pkt_time_chosen,
+        packets, mac_address = device.send_probe(int_pkt_time_chosen,
                                     self.database.get_VHT_capabilities(device.model),
                                     self.database.get_extended_capabilities(device.model),
                                     self.database.get_HT_capabilities(device.model),
                                     burst_length_chosen,
                                     time)
-
+        device.last_mac_address = mac_address
         return int_pkt_time_chosen, burst_rate_chosen, burst_length_chosen, packets
 
     def add_device(self, device: Device) -> None:

@@ -43,6 +43,7 @@ class Device:
         self.number_bursts_sent = 0
         self.wps = None
         self.uuide = None
+        self.last_mac_address = None
 
         if self.randomization == 0:
             # if randomization is disabled, create a MAC address based on the vendor name
@@ -76,7 +77,7 @@ class Device:
                    extended_capabilities: bytes,
                    HT_capabilities: bytes,
                    num_pkt_burst: int,
-                   time: datetime) -> list:
+                   time: datetime) -> (list, str):
         """Function that create a probe packet"""
         # vendor_name model randomization SSID num_pkt_burst outfilename
         if self.randomization == 0:
@@ -111,7 +112,7 @@ class Device:
                 raise Exception("SOMETHING WENT WRONG!")
         else:
             self.mac_address.append(mac_address)
-        return packets
+        return packets, mac_address
 
     def change_phase(self, phase: int, time: datetime) -> None:
         """Function to change the phase of the device"""
