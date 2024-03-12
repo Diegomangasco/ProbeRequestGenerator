@@ -30,7 +30,6 @@ if __name__ == "__main__":
     parser.add_argument('-pt', '--average_permanence_time', type=int, help='Average permanence time for devices', required=True)
     parser.add_argument('-t', '--real_minutes', type=float, help='Duration of the simulation', required=True)
     parser.add_argument('-c', '--closed_environment', action="store_true", help='Set a closed environment for devices')
-    parser.add_argument('-p', '--print_burst_ID', action="store_true", help='Print the device\'s ID for each burst instead for each packet')
 
     args = parser.parse_args()
 
