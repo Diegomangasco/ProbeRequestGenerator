@@ -18,7 +18,7 @@ class DeviceRates:
                     "randomization": int(f["use_randomization"]),
                     "VHT_capabilities": None if f["VHT_capabilities"] == "?" else bytes.fromhex(str(f["VHT_capabilities"].replace("x", ""))),
                     "extended_capabilities": None if f["extended_capabilities"] == "?" else bytes.fromhex(str(f["extended_capabilities"].rstrip().replace("x", ""))),
-                    "HT_capabilities": None if f["HT_capabilities"] == "?" else bytes.fromhex(str(f["HT_capabilities"].rstrip().replace("x", "") + "ffff000000000000000000000000000000000000000000"))
+                    "HT_capabilities": None if f["HT_capabilities"] == "?" else bytes.fromhex(str(f["HT_capabilities"].rstrip().replace("x", "") + "ff00000000000000000000000000000000000000000000"))
                 }
         # Populate the database with second information
         # This latter are about time between different bursts and time between packets in the same burst
