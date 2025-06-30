@@ -77,7 +77,6 @@ class Device:
             new_y = self.y_values[-1] + y_step
             self.x_values.append(new_x)
             self.y_values.append(new_y)
-            print(self.id, new_x, new_y)
 
     def create_mac_address(self) -> str:
         """Create a MAC address based on the vendor name of the device and return it"""
