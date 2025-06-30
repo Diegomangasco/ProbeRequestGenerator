@@ -30,7 +30,7 @@ def create_ssid():
 class Device:
     """Stores device information"""
 
-    def __init__(self, id: int, time: datetime, phase: int, vendor: str, model: str, randomization: int):
+    def __init__(self, id: int, time: datetime, phase: int, vendor: str, model: str, randomization: int, enable_mobility: bool = False):
         self.id = id
         self.time_phase_changed = time
         self.phase = phase  # 0: locked, 1: awake, 2: active
@@ -60,6 +60,24 @@ class Device:
         if ssid:
             self.SSID = create_ssid()
 
+        self.enable_mobility = enable_mobility
+        self.x_values = [random.uniform(-100, 100)]  # Random initial position
+        self.y_values = [random.uniform(-100, 100)]  # Random initial position
+        self.speed_values = [0]
+
+
+    def do_step(self, timestep=1):
+        """Perform a single step in the random walk."""
+        if self.enable_mobility is True:
+            new_speed = random.uniform(0, 1)
+            self.speed_values.append(new_speed)
+            x_step = self.speed_values[-1] * timestep
+            y_step = self.speed_values[-1] * timestep
+            new_x = self.x_values[-1] + x_step
+            new_y = self.y_values[-1] + y_step
+            self.x_values.append(new_x)
+            self.y_values.append(new_y)
+            print(self.id, new_x, new_y)
 
     def create_mac_address(self) -> str:
         """Create a MAC address based on the vendor name of the device and return it"""

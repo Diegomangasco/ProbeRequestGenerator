@@ -2,24 +2,30 @@ import datetime
 from scapy.utils import wrpcap
 from simulator import *
 from datetime import timedelta
+from sniffer import Sniffer
 
 TIME_OFFSET = timedelta(seconds=0.001)
+TIMESTEP = 1  # seconds, timestep for device mobility
 
 
 class Event:
     """Simulator event"""
 
     def __init__(self,
-                 start_time: datetime,
-                 job_type: str,
-                 device: Device = None,
-                 phase: int = None,
-                 vendor: str = None,
-                 model: str = None,
-                 packet=None,
-                 burst_end: bool = None):
+                start_time: datetime,
+                job_type: str,
+                device: Device = None,
+                enable_mobility: bool = False,
+                sniffers: list[Sniffer] = [],
+                phase: int = None,
+                vendor: str = None,
+                model: str = None,
+                packet = None,
+                burst_end: bool = None):
         self.start_time = start_time
         self.device = device
+        self.enable_mobility = enable_mobility
+        self.sniffers = sniffers
         self.job_type = job_type
         self.phase = phase
         self.vendor = vendor
@@ -29,76 +35,98 @@ class Event:
 
 
 def handle_event(event: Event, simulator: Simulator):
-    """Handle event based on job_type (can be "change_phase", "create_device", "delete_device", "send_packet", "create_burst")"""
+    """Handle event based on job_type (can be "change_phase", "create_device", "delete_device", "send_packet", "create_burst", "device_step", "send_packet")"""
 
     if event.job_type == "change_phase":
-        change_phase(simulator, event.device, event.phase, event.start_time)
-        phase, seconds_before_change = generate_phase(event.phase)
-        _ = add_new_event(simulator, (Event(
-            start_time=event.start_time + timedelta(seconds=seconds_before_change),
-            job_type="change_phase",
-            device=event.device,
-            phase=phase
-        )))
-
-        clean_events_after_change_phase(simulator, event.device)
-        if simulator.database.is_sending_probe(event.device.model, event.device.phase):
+        if event.device is not None:
+            change_phase(simulator, event.device, event.phase, event.start_time)
+            phase, seconds_before_change = generate_phase(event.phase)
             _ = add_new_event(simulator, (Event(
-                start_time=event.start_time,
-                job_type="create_burst",
-                device=event.device
-            )))  # schedule probe request now to start new phase behaviour
+                start_time=event.start_time + timedelta(seconds=seconds_before_change),
+                job_type="change_phase",
+                device=event.device,
+                sniffers=event.sniffers,
+                phase=phase
+            )))
 
-    elif event.job_type == "create_burst":
-        if simulator.database.is_sending_probe(event.device.model, event.device.phase):
-            int_pkt_time, burst_rate, burst_length, packets = simulator.new_burst(event.start_time, event.device)
-            counter_sum = timedelta(seconds=0.0)
-            for i in range(int(burst_length)):
-                counter = add_new_event(simulator, (Event(
-                    start_time=event.start_time + i * timedelta(seconds=int_pkt_time) + counter_sum,
-                    job_type="send_packet",
+            clean_events_after_change_phase(simulator, event.device)
+            if simulator.database.is_sending_probe(event.device.model, event.device.phase):
+                _ = add_new_event(simulator, (Event(
+                    start_time=event.start_time,
+                    job_type="create_burst",
                     device=event.device,
-                    packet=packets[i],
-                    burst_end=True if i == burst_length - 1 else False
-                )))
-                counter_sum += counter
-                # Packets have to be updated with the temporal shift like the event
-                # The inter packet time addition is already inside the packets when they are created
-                packets[i].time = (datetime.fromtimestamp(packets[i].time) + counter_sum).timestamp()
-
+                    sniffers=event.sniffers
+                )))  # schedule probe request now to start new phase behaviour
+    
+    elif event.job_type == "device_step":
+        if event.device is not None:
+            event.device.do_step(timestep=TIMESTEP)
             _ = add_new_event(simulator, (Event(
-                start_time=event.start_time + (burst_length - 1) * timedelta(
-                    seconds=int_pkt_time) + counter_sum + timedelta(seconds=burst_rate),
-                job_type="create_burst",
+                start_time=event.start_time + timedelta(seconds=TIMESTEP),
+                job_type="device_step",
                 device=event.device
             )))
 
+    elif event.job_type == "create_burst":
+        if event.device is not None:
+            if simulator.database.is_sending_probe(event.device.model, event.device.phase):
+                int_pkt_time, burst_rate, burst_length, packets = simulator.new_burst(event.start_time, event.device)
+                counter_sum = timedelta(seconds=0.0)
+                for i in range(int(burst_length)):
+                    counter = add_new_event(simulator, (Event(
+                        start_time=event.start_time + i * timedelta(seconds=int_pkt_time) + counter_sum,
+                        job_type="send_packet",
+                        device=event.device,
+                        packet=packets[i],
+                        sniffers = event.sniffers,
+                        burst_end=True if i == burst_length - 1 else False
+                    )))
+                    counter_sum += counter
+                    # Packets have to be updated with the temporal shift like the event
+                    # The inter packet time addition is already inside the packets when they are created
+                    packets[i].time = (datetime.fromtimestamp(packets[i].time) + counter_sum).timestamp()
+
+                _ = add_new_event(simulator, (Event(
+                    start_time=event.start_time + (burst_length - 1) * timedelta(
+                        seconds=int_pkt_time) + counter_sum + timedelta(seconds=burst_rate),
+                    job_type="create_burst",
+                    device=event.device,
+                    sniffers=event.sniffers
+                )))
+
     elif event.job_type == "send_packet":
-        if event.burst_end:
-            event.device.number_bursts_sent += 1
-        with open(simulator.out_file + '_probe_ids.txt', 'a') as f:
-            f.write("Device ID: {}; MAC Address: {}\n".format(event.device.id, event.device.last_mac_address))
-        wrpcap(simulator.out_file + ".pcap", event.packet, append=True)
-        event.device.number_packets_sent += 1
+        if event.device is not None:
+            if event.burst_end:
+                event.device.number_bursts_sent += 1
+            with open(simulator.out_file + '_probe_ids.txt', 'a') as f:
+                f.write("Device ID: {}; MAC Address: {}\n".format(event.device.id, event.device.last_mac_address))
+            wrpcap(simulator.out_file + ".pcap", event.packet, append=True)
+            event.device.number_packets_sent += 1
+            for sn in event.sniffers:
+                packet = sn.receive_packet(event.packet, event.device)
+                if packet is not None:
+                    wrpcap("Sniffer_" + str(sn.id) + ".pcap", packet, append=True)
 
     elif event.job_type == "create_device":
         phase = np.random.choice([0, 1, 2], size=1, p=[0.35, 0.15, 0.50])[
             0]  # probability of starting in locked phase is 35%, in awake phase is 15% and in active phase is 50%
-        device = create_device(simulator, event.start_time, phase, event.vendor, event.model)
+        device = create_device(simulator, event.start_time, phase, event.vendor, event.model, event.enable_mobility)
         new_phase, seconds_before_change = generate_phase(event.phase)
 
         _ = add_new_event(simulator, (Event(
             start_time=event.start_time + timedelta(seconds=seconds_before_change),
             job_type="change_phase",
             device=device,
-            phase=new_phase
+            phase=new_phase,
+            sniffers=event.sniffers
         )))  # schedule phase change
 
         if simulator.database.is_sending_probe(device.model, device.phase):
             _ = add_new_event(simulator, (Event(
                 start_time=event.start_time,
                 job_type="create_burst",
-                device=device
+                device=device,
+                sniffers=event.sniffers
             )))  # schedule first probe request
 
         if not simulator.closed_environment:
@@ -107,21 +135,32 @@ def handle_event(event: Event, simulator: Simulator):
                 job_type="delete_device",
                 device=device
             )))  # schedule device death
+
             next_device_creation = simulator.average_permanence_time / simulator.average_number_of_devices_available  # calculate next device creation time with little law
             vendor, model, randomization = simulator.database.get_random_device()  # get random device
             _ = add_new_event(simulator, (Event(
                 start_time=event.start_time + timedelta(seconds=next_device_creation),
                 job_type="create_device",
                 vendor=vendor,
-                model=model
+                model=model,
+                sniffers=event.sniffers,
+                enable_mobility=event.enable_mobility
+            )))
+        
+        if event.enable_mobility:
+            _ = add_new_event(simulator, (Event(
+                start_time=event.start_time + timedelta(seconds=TIMESTEP),
+                job_type="device_step",
+                device=device
             )))
 
     elif event.job_type == "delete_device":
-        delete_device(simulator, event.device, event.start_time)
-        clean_events_after_delete_device(simulator, event.device.id)
+        if event.device is not None:
+            delete_device(simulator, event.device, event.start_time)
+            clean_events_after_delete_device(simulator, event.device.id)
 
 
-def generate_phase(phase: int) -> [int, int]:
+def generate_phase(phase: int) -> list[tuple[int, int]]:
     """Generate phase based on the given phase"""
     new_phase = 0
     seconds_before_change = 0
@@ -158,10 +197,10 @@ def delete_device(simulator: Simulator, device: Device, time: datetime) -> None:
         )
 
 
-def create_device(simulator: Simulator, time: datetime, phase: int, vendor: str, model: str) -> Device:
+def create_device(simulator: Simulator, time: datetime, phase: int, vendor: str, model: str, enable_mobility: bool = False) -> Device:
     """Create a new device and return it"""
     randomization = simulator.database.get_randomization(model)
-    device = Device(simulator.next_id_device, time, phase, vendor, model, randomization)
+    device = Device(simulator.next_id_device, time, phase, vendor, model, randomization, enable_mobility)
     simulator.add_device(device)
     with open(simulator.out_file + '.txt', 'a') as f:
         f.write(

@@ -1,5 +1,5 @@
-from src.device import *
-from src.read_features import *
+from device import *
+from read_features import *
 
 
 class Simulator:

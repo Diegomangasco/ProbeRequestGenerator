@@ -1,6 +1,9 @@
+import sys
+import os
 from datetime import datetime
 from scapy.layers.dot11 import Dot11, RadioTap, Dot11ProbeReq, Dot11Elt, Dot11EltRates, Dot11EltDSSSet, \
     Dot11EltVendorSpecific
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utility.utils import *
 from numpy import random
 

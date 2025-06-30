@@ -1,5 +1,5 @@
 import argparse
-from src.event import *
+from event import *
 
 # DEVICES = [
 #     "Apple iPhone6",
@@ -19,7 +19,13 @@ from src.event import *
 # ]
 
 DEVICE_CHOSEN = {
-    "Apple iPhone11": 1,
+    "Apple iPhone11": 3,
+    "Apple iPhone13Pro": 3,
+    "Apple iPhone14Pro": 3,
+    "Apple iPhone7": 3,
+    "Samsung Note20Ultra": 3,
+    "Xiaomi Mi9Lite": 3,
+    "Xiaomi Note8T": 3,
 }
 
 if __name__ == "__main__":
@@ -27,9 +33,12 @@ if __name__ == "__main__":
 
     parser.add_argument('-o', '--out_file', type=str, help='Path to the output file', required=True)
     parser.add_argument('-n', '--average_number_of_devices', type=int, help='Average number of devices', required=True)
-    parser.add_argument('-pt', '--average_permanence_time', type=int, help='Average permanence time for devices', required=True)
-    parser.add_argument('-t', '--real_minutes', type=float, help='Duration of the simulation', required=True)
+    parser.add_argument('-pt', '--average_permanence_time', type=int, help='Average permanence time for devices (minutes)', required=True)
+    parser.add_argument('-t', '--real_minutes', type=float, help='Duration of the simulation (minutes)', required=True)
     parser.add_argument('-c', '--closed_environment', action="store_true", help='Set a closed environment for devices')
+    parser.add_argument('-s', '--sniffers', type=int, default=0, help='Number of sniffers in the simulation')
+    parser.add_argument('-snp', '--sniffer_positions', type=str, default=None, help='2D position of sniffers in the simulation (e.g., "0,0;1,1;2,2")')
+    parser.add_argument('-em', '--enable_mobility', action="store_true", help='Enable mobility for devices')
 
     args = parser.parse_args()
 
@@ -39,6 +48,9 @@ if __name__ == "__main__":
     average_permanence_time = args.average_permanence_time
     real_minutes = args.real_minutes
     closed_environment = args.closed_environment
+    enable_mobility = args.enable_mobility
+    sniffers = args.sniffers
+    sniffer_positions = args.sniffer_positions
 
     start_time = datetime.now()
     simulator = Simulator(
@@ -54,10 +66,22 @@ if __name__ == "__main__":
 
     last_time = None
 
-    for k in DEVICE_CHOSEN.keys():
-        for _ in range(DEVICE_CHOSEN[k]):
-            add_new_event(simulator, Event(start_time, "create_device", vendor=k.split(" ")[0], model=k.split(" ")[1]))
+    sniffer_list = list()
+    positions = sniffer_positions.split(';')
+    for i in range(sniffers):
+        if sniffer_positions is not None:
+            pos = positions[i].split(',')
+            x, y = float(pos[0]), float(pos[1])
+        else:
+            x, y = 0, 0
+        sniffer = Sniffer((x, y), id=i+1)
+        sniffer.start()
+        sniffer_list.append(sniffer)
+    
+    for k, value in DEVICE_CHOSEN.items():
+        add_new_event(simulator, Event(start_time, "create_device", vendor=k.split(" ")[0], model=k.split(" ")[1], enable_mobility=enable_mobility, sniffers=sniffer_list))
 
+    
     with open(simulator.out_file + '.txt', 'a') as f:
         f.write('+++++++++++Simulation start+++++++++++\n')
         f.write('Initial time (real and simulated): {}\n'.format(start_time))
